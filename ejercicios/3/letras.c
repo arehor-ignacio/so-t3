@@ -21,17 +21,18 @@ int ocupados[CANT_ESPACIOS] = {0};
 int escritos[CANT_ESPACIOS] = {0};
 
 ssize_t read (struct file* file, char __user * data, size_t size, loff_t *off) {
-	if (file->private_data == NULL || escritos[(int)file->private_data] != 1) {
+	if (file->private_data == NULL || escritos[*((int*)file->private_data)] != 1) {
 		return -EPERM;
 	}
 
 	int i = 0;
-	while (i < size && copy_to_user(data + i, letras + (int)file->private_data, 1) == 0) {
+	while (i < size && copy_to_user(data + i, letras + *((int*)file->private_data), 1) == 0) {
 		i++;
 	}
 
 	if (i < size) {
-		printk(KERN_ALERT "No tenés permisos papá!");
+		printk(KERN_ALERT "No tienes permisos loko!");
+		return 0;
 	}
 
 	return size;
@@ -42,11 +43,11 @@ ssize_t write (struct file* file, const char __user * data, size_t size, loff_t 
 		return -EPERM;
 	}
 
-	if (copy_from_user(letras + (int)file->private_data, data, 1) != 0) {
-		printk(KERN_ALERT "No tenés permisos papá!");
+	if (copy_from_user(letras + *((int*)file->private_data), data, 1) != 0) {
+		printk(KERN_ALERT "No tienes permisos loko!");
 	}
 
-	escritos[(int) file->private_data] = 1;
+	escritos[*((int*)file->private_data)] = 1;
 	return size;
 }
 
@@ -59,15 +60,16 @@ ssize_t open (struct inode* inode, struct file* file) {
 	}
 
 	if (i == CANT_ESPACIOS) {
-		return -EPERM;
+		printk(KERN_ALERT "Todos los lugares llenos.");
 	} else {
 		ocupados[i] = 1;
-		file->private_data = i;
+		file->private_data = kmalloc(sizeof(int), GFP_KERNEL);
+		*((int*)file->private_data) = i;
 	}
 
 	up(&mutex);
 
-	return SUCCESS;
+	return i < CANT_ESPACIOS ? SUCCESS : -EPERM;
 }
 
 ssize_t release (struct inode* inode, struct file* file) {
@@ -75,8 +77,9 @@ ssize_t release (struct inode* inode, struct file* file) {
 		return -EPERM;
 	}
 
-	ocupados[(int) file->private_data] = NULL;
-	escritos[(int) file->private_data] = 0;
+	ocupados[*((int*)file->private_data)] = NULL;
+	escritos[*((int*)file->private_data)] = 0;
+	kfree(file->private_data);
 
 	return SUCCESS;
 }
@@ -118,7 +121,7 @@ static int __init hello_init(void) {
 }
 
 static void __exit hello_exit(void) {
-	printk(KERN_ALERT "Descargando módulo...\n");
+	printk(KERN_ALERT "Descargando mod...\n");
 
 	// Destruímos el dispositivo
 	device_destroy(_class, _major);
